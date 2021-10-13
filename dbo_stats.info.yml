@@ -1,0 +1,9 @@
+name: 'Stats'
+type: module
+description: 'Gathering statistics.'
+core_version_requirement: ^8 || ^9
+package: 'Custom'
+dependencies:
+  - jwt
+  - rest
+  - search_api_solr

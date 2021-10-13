@@ -1,0 +1,318 @@
+<?php
+
+use Drupal\Core\Database\Database;
+
+/**
+ * @file
+ * Install and update functions for the dbo_stats module.
+ */
+
+/**
+ * Implements hook_uninstall().
+ */
+function dbo_stats_uninstall() {}
+
+/**
+ * Implements hook_schema().
+ */
+function dbo_stats_schema() {
+  $schema['dbo_stats_counter'] = [
+    'description' => 'Access statistics for nodes.',
+    'fields' => [
+      'dmy' => [
+        'description' => 'Year, month, day.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ],
+      'role' => [
+        'description' => 'The role of the viewer.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => true,
+      ],
+      'nid' => [
+        'description' => 'The node nid.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ],
+      'count' => [
+        'description' => 'Count of the node.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 1,
+      ],
+    ],
+  ];
+  $schema['dbo_stats_failed_searches'] = [
+    'description' => 'Access statistics for failed searches.',
+    'fields' => [
+      'dmy' => [
+        'description' => 'Year, month, day.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ],
+      'role' => [
+        'description' => 'The role of the viewer.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => true,
+      ],
+      'success' => [
+        'description' => 'Successful searches.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ],
+      'fail' => [
+        'description' => 'Failed searches.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ],
+    ],
+  ];
+  $schema['dbo_stats_search_terms'] = [
+    'description' => 'Search terms.',
+    'fields' => [
+      'term' => [
+        'description' => 'The search term(s).',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => true,
+      ],
+      'success' => [
+        'description' => 'Count, if has results.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ],
+      'fail' => [
+        'description' => 'Count, if has no results.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ],
+    ],
+  ];
+  $schema['dbo_stats_page_track'] = [
+    'description' => 'Page track.',
+    'fields' => [
+      'dmy' => [
+        'description' => 'Year, month, day.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ],
+      'nid' => [
+        'description' => 'Node ID.',
+        'type' => 'int',
+        'unsigned' => true,
+        'not null' => true,
+      ],
+      'role' => [
+        'description' => 'The role of the viewer.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => true,
+      ],
+      'time' => [
+        'description' => 'Total time the page has been viewed.',
+        'type' => 'int',
+        'unsigned' => true,
+        'not null' => true,
+        'default' => 0,
+      ],
+    ],
+  ];
+  $schema['dbo_stats_access_time'] = [
+    'description' => 'Contains last accessed time of users since viewing content.',
+    'fields' => [
+      'uid' => [
+        'description' => 'User ID.',
+        'type' => 'int',
+        'unsigned' => true,
+        'not null' => true,
+      ],
+      'time' => [
+        'description' => 'Total time the page has been viewed.',
+        'type' => 'int',
+        'unsigned' => true,
+        'not null' => true,
+        'default' => 0,
+      ],
+    ],
+  ];
+
+  return $schema;
+}
+
+/**
+ * Add index to the dbo_stats_ tables.
+ */
+function dbo_stats_update_8001() {
+  $database = \Drupal::database();
+  $database->schema()->addIndex(
+    'dbo_stats_counter',
+    'dbo_stats_counter_index',
+    ['dmy', 'role', 'nid', 'count'],
+    [
+      'fields' => [
+        'dmy'   => [
+          'description' => 'Year, month, day.',
+          'type'        => 'int',
+          'unsigned'    => TRUE,
+          'not null'    => TRUE,
+        ],
+        'role'  => [
+          'description' => 'The role of the viewer.',
+          'type'        => 'varchar',
+          'length'      => 255,
+          'not null'    => TRUE,
+        ],
+        'nid'   => [
+          'description' => 'The node nid.',
+          'type'        => 'int',
+          'unsigned'    => TRUE,
+          'not null'    => TRUE,
+          'default'     => 0,
+        ],
+        'count' => [
+          'description' => 'Count of the node.',
+          'type'        => 'int',
+          'unsigned'    => TRUE,
+          'not null'    => TRUE,
+          'default'     => 1,
+        ],
+      ],
+    ]
+  );
+  $database->schema()->addIndex(
+    'dbo_stats_failed_searches',
+    'dbo_stats_failed_searches_index',
+    ['dmy', 'role', 'success', 'fail'],
+    [
+      'fields' => [
+        'dmy'     => [
+          'description' => 'Year, month, day.',
+          'type'        => 'int',
+          'unsigned'    => TRUE,
+          'not null'    => TRUE,
+        ],
+        'role'    => [
+          'description' => 'The role of the viewer.',
+          'type'        => 'varchar',
+          'length'      => 255,
+          'not null'    => TRUE,
+        ],
+        'success' => [
+          'description' => 'Successful searches.',
+          'type'        => 'int',
+          'unsigned'    => TRUE,
+          'not null'    => TRUE,
+          'default'     => 0,
+        ],
+        'fail'    => [
+          'description' => 'Failed searches.',
+          'type'        => 'int',
+          'unsigned'    => TRUE,
+          'not null'    => TRUE,
+          'default'     => 0,
+        ],
+      ],
+    ]
+  );
+  $database->schema()->addIndex(
+    'dbo_stats_search_terms',
+    'dbo_stats_search_terms_index',
+    ['term', 'success', 'fail'],
+    [
+      'fields' => [
+        'term'    => [
+          'description' => 'The search term(s).',
+          'type'        => 'varchar',
+          'length'      => 255,
+          'not null'    => TRUE,
+        ],
+        'success' => [
+          'description' => 'Count, if has results.',
+          'type'        => 'int',
+          'unsigned'    => TRUE,
+          'not null'    => TRUE,
+          'default'     => 0,
+        ],
+        'fail'    => [
+          'description' => 'Count, if has no results.',
+          'type'        => 'int',
+          'unsigned'    => TRUE,
+          'not null'    => TRUE,
+          'default'     => 0,
+        ],
+      ],
+    ]
+  );
+  $database->schema()->addIndex(
+    'dbo_stats_page_track',
+    'dbo_stats_page_track_index',
+    ['dmy', 'nid', 'role', 'time'],
+    [
+      'fields' => [
+        'dmy'  => [
+          'description' => 'Year, month, day.',
+          'type'        => 'int',
+          'unsigned'    => TRUE,
+          'not null'    => TRUE,
+        ],
+        'nid'  => [
+          'description' => 'Node ID.',
+          'type'        => 'int',
+          'unsigned'    => TRUE,
+          'not null'    => TRUE,
+        ],
+        'role' => [
+          'description' => 'The role of the viewer.',
+          'type'        => 'varchar',
+          'length'      => 255,
+          'not null'    => TRUE,
+        ],
+        'time' => [
+          'description' => 'Total time the page has been viewed.',
+          'type'        => 'int',
+          'unsigned'    => TRUE,
+          'not null'    => TRUE,
+          'default'     => 0,
+        ],
+      ],
+    ]
+  );
+  $database->schema()->addIndex(
+    'dbo_stats_access_time',
+    'dbo_stats_access_time_index',
+    ['uid', 'time'],
+    [
+      'fields' => [
+        'uid'  => [
+          'description' => 'User ID.',
+          'type'        => 'int',
+          'unsigned'    => TRUE,
+          'not null'    => TRUE,
+        ],
+        'time' => [
+          'description' => 'Total time the page has been viewed.',
+          'type'        => 'int',
+          'unsigned'    => TRUE,
+          'not null'    => TRUE,
+          'default'     => 0,
+        ],
+      ],
+    ]
+  );
+}

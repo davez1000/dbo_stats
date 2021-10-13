@@ -1,0 +1,193 @@
+<?php
+
+/**
+ * @file
+ * Contains dbo_stats.module.
+ */
+
+use Drupal\Core\Routing\RouteMatchInterface;
+use Drupal\search_api\Query\ResultSetInterface;
+use Drupal\search_api\Query\QueryInterface;
+use Solarium\QueryType\Select\Result\Result;
+
+/**
+ * Implements hook_help().
+ */
+function dbo_stats_help($route_name, RouteMatchInterface $route_match) {
+  switch ($route_name) {
+    // Main module help for the dbo_stats module.
+    case 'help.page.dbo_stats':
+      $output = '';
+      $output .= '<h3>' . t('About') . '</h3>';
+      $output .= '<p>' . t('Gathering statistics.') . '</p>';
+      return $output;
+
+    default:
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function dbo_stats_theme() {
+  return [
+    'dbo_stats' => [
+      'render element' => 'children',
+    ],
+  ];
+}
+
+/**
+ * Implements hook_page_top().
+ */
+function dbo_stats_page_top(array &$page_top) {
+  $db = \Drupal::database();
+  $page_top['#cache']['max-age'] = 0;
+  $route_match = \Drupal::routeMatch();
+  if ($route_match->getRouteName() == 'entity.node.canonical') {
+    $node = $route_match->getParameter('node');
+    if (empty($node->in_preview) && !$node->isNew()) {
+
+      $current_user = \Drupal::currentUser();
+      $current_user_roles = $current_user->getRoles();
+
+      // Record user viewing field notices.
+      if ($node->bundle() == 'filed_notices') {
+        $field_notice_viewers = \Drupal::state()->get('dbo_stats_field_notice_viewers') ?? [];
+        $field_notice_viewers[$node->id()][] = $current_user->id();
+        $field_notice_viewers[$node->id()] = array_unique($field_notice_viewers[$node->id()]);
+        \Drupal::state()->set('dbo_stats_field_notice_viewers', $field_notice_viewers);
+      }
+
+      // Record access time when hitting content.
+      $db->merge('dbo_stats_access_time')
+        ->key([
+          'uid' => $current_user->id(),
+        ])
+        ->fields([
+          'uid' => $current_user->id(),
+          'time' => \Drupal::time()->getRequestTime(),
+        ])->execute();
+
+      if (!empty($current_user_roles)) {
+        try {
+          $db = \Drupal::database();
+          $time = \Drupal::time()->getRequestTime();
+          $dmy = \Drupal::service('date.formatter')->format($time, 'custom', 'ymd');
+          foreach ($current_user_roles as $role) {
+            if (preg_match('/^authenticated|administrator$/', $role)) {
+              continue;
+            }
+            $db->merge('dbo_stats_counter')
+              ->key([
+                'dmy' => $dmy,
+                'role' => $role,
+                'nid' => $node->id(),
+              ])
+              ->expression('count', 'count + 1')
+              ->fields([
+                'role' => $role,
+                'dmy' => $dmy,
+                'nid' => $node->id(),
+              ])->execute();
+          }
+        } catch (\Exception $e) {
+          \Drupal::logger('dbo_stats')->warning($e->getMessage());
+          $data = [
+            'message' => $e->getMessage(),
+            'error' => TRUE,
+          ];
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_search_api_solr_search_results_alter().
+ */
+function dbo_stats_search_api_solr_search_results_alter(ResultSetInterface $result_set, QueryInterface $query, Result $result) {
+
+  $current_user_roles = \Drupal::currentUser()->getRoles();
+  $time = \Drupal::time()->getRequestTime();
+  $dmy = \Drupal::service('date.formatter')->format($time, 'custom', 'ymd');
+
+  switch ($query->getSearchId()) {
+    case 'views_page:solr_search_dbo__page_1':
+      if (!empty($current_user_roles) && !empty($query->getKeys())) {
+        try {
+          $db   = \Drupal::database();
+          $time = \Drupal::time()->getRequestTime();
+          $dmy  = \Drupal::service('date.formatter')
+                         ->format($time, 'custom', 'ymd');
+          foreach ($current_user_roles as $role) {
+            if (preg_match('/^authenticated|administrator$/', $role)) {
+              continue;
+            }
+            // Record failed search numbers by role.
+            $qresults = $db->select('dbo_stats_failed_searches', 'a')
+                           ->fields('a')
+                           ->condition('dmy', $dmy, '=')
+                           ->condition('role', $role, '=')
+                           ->execute()
+                           ->fetchAll();
+            if (!empty($qresults)) {
+              $db->update('dbo_stats_failed_searches')
+                 ->fields([
+                   'success' => $result->getNumFound() < 1 ? $qresults[0]->success : $qresults[0]->success + 1,
+                   'fail'    => $result->getNumFound() < 1 ? $qresults[0]->fail + 1 : $qresults[0]->fail,
+                 ])
+                 ->condition('dmy', $dmy, '=')
+                 ->condition('role', $role, '=')
+                 ->execute();
+            }
+            else {
+              $db->insert('dbo_stats_failed_searches')
+                 ->fields([
+                   'dmy'     => $dmy,
+                   'role'    => $role,
+                   'success' => $result->getNumFound() < 1 ? 0 : 1,
+                   'fail'    => $result->getNumFound() < 1 ? 1 : 0,
+                 ])
+                 ->execute();
+            }
+          }
+
+          // Record failed and successful search terms.
+          $qresults = $db->select('dbo_stats_search_terms', 'a')
+                         ->fields('a')
+                         ->condition('term', $query->getKeys(), '=')
+                         ->execute()
+                         ->fetchAll();
+          if (!empty($qresults)) {
+            $db->update('dbo_stats_search_terms')
+               ->fields([
+                 'success' => $result->getNumFound() < 1 ? $qresults[0]->success : $qresults[0]->success + 1,
+                 'fail'    => $result->getNumFound() < 1 ? $qresults[0]->fail + 1 : $qresults[0]->fail,
+               ])
+               ->condition('term', $query->getKeys(), '=')
+               ->execute();
+          }
+          else {
+            $db->insert('dbo_stats_search_terms')
+               ->fields([
+                 'term'    => $query->getKeys(),
+                 'success' => $result->getNumFound() < 1 ? 0 : 1,
+                 'fail'    => $result->getNumFound() < 1 ? 1 : 0,
+               ])
+               ->execute();
+          }
+
+        }
+        catch (\Exception $e) {
+          \Drupal::logger('dbo_stats')->warning($e->getMessage());
+          $data = [
+            'message' => $e->getMessage(),
+            'error'   => TRUE,
+          ];
+        }
+      }
+      break;
+  }
+
+}

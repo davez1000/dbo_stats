@@ -1,0 +1,17 @@
+{
+  "name": "abs/dbo_stats",
+  "description": "Statistics gathering API for Knowledge Base site.",
+  "type": "drupal-module",
+  "autoload": {
+    "psr-4": {
+      "Drupal\\dbo_stats\\": "src/"
+    }
+  },
+  "extra": {
+    "drush": {
+      "services": {
+        "drush.services.yml": "^9"
+      }
+    }
+  }
+}

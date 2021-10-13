@@ -1,0 +1,5 @@
+services:
+  dbo_stats.commands:
+    class: \Drupal\dbo_stats\Commands\DboStatsCommands
+    tags:
+      - { name: drush.command }
